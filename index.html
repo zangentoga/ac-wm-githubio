@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Action-coordinate world models for precise control from offline data</title>
+  <meta name="description" content="A latent representation in which actions act linearly and the task's target sits at the origin, turning planning into a closed-form policy.">
+
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <header class="topbar">
+    <nav class="topbar__nav">
+      <a href="#abstract">Abstract</a>
+      <a href="#method">Method</a>
+      <a href="#comparison">Comparison</a>
+      <a href="#environments">Environments</a>
+      <a href="#results">Results</a>
+    </nav>
+  </header>
+
+  <main>
+
+    <section class="hero">
+      <h1>Action-coordinate world models for precise control from offline data</h1>
+      <p class="hero__tagline">
+        A latent space where actions act linearly and every task's target sits at the origin,
+        turning planning into a single closed-form step.
+      </p>
+    </section>
+
+    <section id="abstract" class="section">
+      <h2>Abstract</h2>
+      <div class="prose">
+        <p>
+          World models are trained to predict, then used to plan. Where a task demands precision, the two
+          objectives come apart: a model that fits its observations well can still leave the planner without
+          a route to the target. We study tasks in which objects must be placed precisely to maximize a
+          reward signal, even though their positions are never observed directly, and where an unknown,
+          per-episode context both displaces the target and distorts every action.
+        </p>
+        <p>
+          We introduce <strong>action-coordinates</strong>: latent representations in which actions act
+          linearly and the target sits at the origin. On top of them we build a world-model architecture
+          that moves structure out of the planner and into the representation itself. We study the
+          mathematical conditions under which action-coordinates exist, what structure they impose, and when
+          they can be learned from high-dimensional observations, and we derive a closed-form policy
+          together with the conditions under which it is optimal. We validate the theory on challenging,
+          high-fidelity, visually observed benchmarks, where action-coordinate world models (<strong>AC-WM</strong>)
+          outperform both planner-based and gradient-based world models.
+        </p>
+      </div>
+    </section>
+
+    <section id="teaser" class="section section--wide">
+      <h2 class="visually-hidden">Environments overview</h2>
+      <figure class="teaser">
+        <div class="teaser__grid">
+          <figure class="teaser__cell">
+            <img src="assets/trajectories/env_trajectory_optiland.png" alt="Example trajectory toward the optimum on the LensAlignment task" loading="lazy">
+            <figcaption>LensAlignment: Active alignment of lense systems</figcaption>
+          </figure>
+          <figure class="teaser__cell">
+            <img src="assets/trajectories/env_trajectory_relign.png" alt="Example trajectory toward the optimum on the Relign task" loading="lazy">
+            <figcaption>Relign: Alignment on a real-world-inspired optical system</figcaption>
+          </figure>
+          <figure class="teaser__cell">
+            <img src="assets/trajectories/env_trajectory_cheetah.png" alt="Example trajectory toward the optimum on the BeamAlignment task" loading="lazy">
+            <figcaption>BeamAlignment: Alignment of particle beam</figcaption>
+          </figure>
+          <figure class="teaser__cell">
+            <img src="assets/trajectories/env_trajectory_interferobot.png" alt="Example trajectory toward the optimum on the Interferobot task" loading="lazy">
+            <figcaption>Interferobot: Alignment of interferometer beams</figcaption>
+          </figure>
+          <figure class="teaser__cell">
+            <img src="assets/trajectories/env_trajectory_lighttunnel.png" alt="Example trajectory toward the optimum on the LightTunnel task" loading="lazy">
+            <figcaption>LightTunnel: Camera tuning in a light tunnel</figcaption>
+          </figure>
+          <figure class="teaser__cell">
+            <img src="assets/trajectories/env_trajectory_bolt.png" alt="Example trajectory toward the optimum on the SpheroEnv task" loading="lazy">
+            <figcaption>SpheroEnv: Positioning of a ball robot</figcaption>
+          </figure>
+          <figure class="teaser__cell">
+            <img src="assets/trajectories/env_trajectory_bolt_real.png" alt="Example trajectory toward the optimum on the SpheroEnv task, real hardware" loading="lazy">
+            <figcaption>SpheroEnv (real): Same task on physical hardware</figcaption>
+          </figure>
+        </div>
+        <figcaption class="teaser__caption">Trajectories toward the optimum with reward below.</figcaption>
+      </figure>
+    </section>
+
+    <section id="method" class="section section--wide">
+      <h2>Method</h2>
+
+      <figure class="fig fig--full">
+        <img src="assets/figures/method_overview.png" alt="Overview of AC-WM training and test-time procedure" loading="lazy">
+        <figcaption>Training fits an action-linear latent space. At test time, the policy solves for the action in closed form.</figcaption>
+      </figure>
+
+      <div class="prose">
+        <p>
+          Model-based reinforcement learning fits a world model to logged transitions, then searches it for
+          the action to apply, by imagining rollouts, by gradient ascent on a predicted return, or by
+          sampling candidate actions. This division of labor leaves the search with the harder half:
+          planning over a learned model is considerably harder than the model's own accuracy would suggest.
+          On tasks where the reward is highly sensitive to small misalignments and the context that causes
+          them is never directly observed, this gap becomes the failure mode. A residual the model
+          treats as small can be a large misalignment, and identifying the hidden context across frames
+          falls entirely to the planner.
+        </p>
+        <p>
+          We take a more direct route: instead of learning a latent space and leaving a planner to search
+          it, we learn <strong>action-coordinate systems</strong>, latent coordinates in which actions
+          act <em>linearly</em> and the target always sits at the <em>origin</em>. Solving the task then
+          means steering the latent state to zero, which has a closed-form, one-step solution and needs no
+          search at all. What remains outside the model is identification: the encoder has to absorb
+          whatever distortion the hidden context causes into coordinates that stay linear in the action.
+        </p>
+        <p>
+          We formalize when action-coordinate systems exist, when a closed-form policy is time-optimal, and
+          when an encoder can realize such coordinates from raw image observations. The resulting
+          architecture, <strong>AC-WM</strong>, is trained on offline, reward-anchored trajectories and
+          replaces search-based planning with a single pseudo-inverse step toward the origin. The approach
+          assumes reachable, target-set tasks under reversible dynamics; the paper discusses these
+          assumptions and their limitations in more detail.
+        </p>
+      </div>
+    </section>
+
+    <section id="comparison" class="section section--wide">
+      <h2>Trajectory comparison</h2>
+      <div class="compare-block">
+        <h3 class="compare-block__title">SpheroEnv</h3>
+        <div class="fig-grid fig-grid--two">
+          <figure class="fig">
+            <img src="assets/trajectories/env_trajectory_bolt_acwm.png" alt="AC-WM trajectory on SpheroEnv converging directly to the goal" loading="lazy">
+            <figcaption>AC-WM (ours)</figcaption>
+          </figure>
+          <figure class="fig">
+            <img src="assets/trajectories/env_trajectory_bolt_planner.png" alt="Planner-based world model trajectory on SpheroEnv failing to converge" loading="lazy">
+            <figcaption>Planner world model</figcaption>
+          </figure>
+        </div>
+        <p class="compare-block__note">AC-WM steers straight to the goal; the planner-based model never converges.</p>
+      </div>
+      <div class="compare-block">
+        <h3 class="compare-block__title">Interferobot</h3>
+        <div class="fig-grid fig-grid--two">
+          <figure class="fig">
+            <img src="assets/trajectories/env_trajectory_interferobot_acwm.png" alt="AC-WM trajectory on Interferobot converging directly to the optimum" loading="lazy">
+            <figcaption>AC-WM (ours)</figcaption>
+          </figure>
+          <figure class="fig">
+            <img src="assets/trajectories/env_trajectory_interferobot_planner.png" alt="Planner-based world model trajectory on Interferobot failing to converge" loading="lazy">
+            <figcaption>Planner world model</figcaption>
+          </figure>
+        </div>
+        <p class="compare-block__note">AC-WM converges within a few steps; the planner-based model stalls short of the optimum.</p>
+      </div>
+    </section>
+
+    <section id="environments" class="section">
+      <h2>Environments</h2>
+      <div class="prose">
+        <p>
+          We evaluate on five positioning tasks that share one structure: an image (and, on some tasks, a
+          low-dimensional vector) as the observation, a reward that is maximal at a target displaced by a
+          hidden per-episode context, and an actuation the same context rescales. The context differs across
+          tasks, such as a manufacturing defect, an incoming beam, an actuator calibration, the color of the
+          illumination, or an unknown action frame, and so does the target: a single point for most
+          tasks, or a line for BeamAlignment, where several magnets jointly steer multiple beam parameters.
+          LightTunnel runs on physical hardware and SpheroEnv has a real hardware twin; the rest are
+          high-fidelity simulators.
+        </p>
+      </div>
+      <div class="env-grid">
+        <article class="env-card">
+          <h3>LensAlignment</h3>
+          <p>Active alignment of a lens system, a Cooke triplet whose individual lenses are decentered
+            and tilted anew every episode.</p>
+        </article>
+        <article class="env-card">
+          <h3>BeamAlignment</h3>
+          <p>Steering a charged-particle beam onto a diagnostic screen at a real particle-accelerator test
+            facility, using multiple magnets to jointly control several beam parameters.</p>
+        </article>
+        <article class="env-card">
+          <h3>Interferobot</h3>
+          <p>Overlapping the two beams of an optical interferometer so that their visibility is maximized.</p>
+        </article>
+        <article class="env-card">
+          <h3>LightTunnel</h3>
+          <p>Tuning the focus, gain, and two polarizers of a camera looking into a physical light-tunnel
+            testbed.</p>
+        </article>
+        <article class="env-card">
+          <h3>SpheroEnv</h3>
+          <p>Driving a rolling-ball robot to a goal in a planar arena, evaluated in simulation and on a real
+            hardware twin.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="results" class="section section--wide">
+      <h2>Results</h2>
+
+      <div class="prose">
+        <p>
+          AC-WM outperforms every other world-model scheme by a wide margin, and on most environments it
+          comes close to step-optimal once its short probing phase is done. The exception is
+          BeamAlignment, which needs more steps because the closed-form policy is not guaranteed to be
+          time-optimal there. The gap is not caused by the encoder: on SpheroEnv, both AC-WM and the vanilla
+          world models read the same keypoint-encoded image, yet AC-WM is already inside the goal radius on
+          the smallest training set, while the vanilla planners need far more data before planning works at
+          all.
+        </p>
+      </div>
+
+      <figure class="fig fig--full">
+        <img src="assets/figures/main_grid.png" alt="Reward against the evaluation step for all environments and methods; AC-WM (red) reaches near-optimal reward fastest on nearly every environment." loading="lazy">
+        <figcaption>Reward against the evaluation step, all environments. Each panel shows the method
+          configuration with the largest area under its pooled median curve.</figcaption>
+      </figure>
+
+      <h3 class="results__subhead">Comparison with offline RL</h3>
+      <figure class="fig fig--full">
+        <img src="assets/figures/offline_grid.png" alt="Reward against the evaluation step for AC-WM, IQL and TD3+BC on anchored and random data; AC-WM reaches the highest reward on most environments." loading="lazy">
+        <figcaption>Reward against the evaluation step: AC-WM versus the offline RL baselines IQL and TD3+BC,
+          each trained on anchored and random data.</figcaption>
+      </figure>
+
+      <h3 class="results__subhead">Sample efficiency</h3>
+      <div class="prose">
+        <p>
+          AC-WM is far more sample-efficient than both vanilla world models and online model-based RL: on
+          SpheroEnv, AC-WM's planner is already effective on the smallest training set, well before the
+          vanilla world model's planner starts working at all. On BeamAlignment, AC-WM reaches a lower beam
+          error from far fewer offline transitions than an online, well-tuned model-based baseline needs,
+          even given substantially more environment interactions.
+        </p>
+      </div>
+      <figure class="fig fig--full">
+        <img src="assets/figures/bolt_data_regime.png" alt="Final distance to goal on SpheroEnv against training-set size" loading="lazy">
+        <figcaption>Final distance to the goal on SpheroEnv against training-set size, one line per data-collection regime.</figcaption>
+      </figure>
+      <div class="fig-grid fig-grid--two">
+        <figure class="fig">
+          <img src="assets/figures/sota_beam.png" alt="Beam error on BeamAlignment against environment transitions, AC-WM versus offline baselines" loading="lazy">
+          <figcaption>Beam error on BeamAlignment against environment transitions: AC-WM versus the offline baselines.</figcaption>
+        </figure>
+        <figure class="fig">
+          <img src="assets/figures/online_beam.png" alt="Beam error on BeamAlignment against environment transitions, AC-WM offline versus online TD-MPC2" loading="lazy">
+          <figcaption>Beam error on BeamAlignment against environment transitions: AC-WM (offline) versus online TD-MPC2 with different planning horizons.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
